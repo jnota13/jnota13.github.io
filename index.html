@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#087F72" id="themeColorMeta">
+<meta name="description" content="Private, local-first alcohol intake tracking and planning experiment. Not a medical treatment tool.">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font-size:14px}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Taper Planner</title>
+<style>
+/* Layout: a dose-card app. Sticky tab bar, one view at a time, large mono numerals for amounts and clock times. */
+:root{
+  --bg:#EDF1F0; --surface:#FFFFFF; --ink:#14201E; --muted:#50615E; --line:#CBD6D3;
+  --accent:#0E6B62; --accent-ink:#FFFFFF; --accent-soft:#DCEFEA;
+  --warn-bg:#FFF0D1; --warn-ink:#654000; --warn-line:#DFAE45;
+  --bad-bg:#FBE2DF; --bad-ink:#7A1B12; --bad-line:#D5736A;
+  --ok-bg:#DCEFEA; --ok-ink:#0A4A42; --ok-line:#79B9AE;
+  --display:'Schibsted Grotesk',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C1413; --surface:#152120; --ink:#E5EEEC; --muted:#9BAFAB; --line:#283936;
+    --accent:#4FC4B4; --accent-ink:#04201B; --accent-soft:#17342F;
+    --warn-bg:#392A0A; --warn-ink:#F3D28F; --warn-line:#86671F;
+    --bad-bg:#3E1815; --bad-ink:#F7C2BB; --bad-line:#93443C;
+    --ok-bg:#17342F; --ok-ink:#BDEBE3; --ok-line:#2F6B62;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C1413; --surface:#152120; --ink:#E5EEEC; --muted:#9BAFAB; --line:#283936;
+  --accent:#4FC4B4; --accent-ink:#04201B; --accent-soft:#17342F;
+  --warn-bg:#392A0A; --warn-ink:#F3D28F; --warn-line:#86671F;
+  --bad-bg:#3E1815; --bad-ink:#F7C2BB; --bad-line:#93443C;
+  --ok-bg:#17342F; --ok-ink:#BDEBE3; --ok-line:#2F6B62;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--display); font-size:16px; line-height:1.5;
+  padding-block:0 40px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+body::before{content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--bg)}
+.wrap{max-width:640px; margin:0 auto}
+header.top{position:sticky; top:env(safe-area-inset-top, 0px); z-index:9; background:var(--bg); padding:12px 0 10px; border-bottom:1px solid var(--line)}
+.brand{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:10px}.brand-tools{display:flex;align-items:center;gap:8px}.icon-btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;min-height:38px;padding:6px 10px;font:inherit;font-size:13px;cursor:pointer}
+.brand h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-0.01em}
+.brand span{font-size:12px; color:var(--muted)}
+nav.tabs{display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
+nav.tabs a{
+  text-align:center; padding:9px 4px; border-radius:8px; text-decoration:none; color:var(--muted);
+  font-weight:600; font-size:14px; border:1px solid var(--line); background:var(--surface);
+}
+nav.tabs a[aria-current="page"]{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+main{padding-top:18px; display:flex; flex-direction:column; gap:14px}
+section[hidden]{display:none}
+.view{display:flex; flex-direction:column; gap:14px}
+h2{font-size:22px; line-height:1.2; margin:0; letter-spacing:-0.01em; text-wrap:balance}
+h3{font-size:13px; margin:0 0 10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); font-weight:600}
+p{margin:0; max-width:65ch}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px; min-width:0}
+.banner{border-radius:12px; padding:14px 16px; border:1px solid; min-width:0}
+.banner strong{display:block; margin-bottom:4px}
+.banner ul{margin:8px 0 0; padding-left:20px}
+.b-ok{background:var(--ok-bg); color:var(--ok-ink); border-color:var(--ok-line)}
+.b-warn{background:var(--warn-bg); color:var(--warn-ink); border-color:var(--warn-line)}
+.b-bad{background:var(--bad-bg); color:var(--bad-ink); border-color:var(--bad-line)}
+.b-note{background:var(--surface); color:var(--ink); border-color:var(--line)}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.field{display:flex; flex-direction:column; gap:4px; min-width:0}
+.field label,.lbl{font-size:14px; font-weight:600}
+.hint{font-size:13px; color:var(--muted)}
+input[type=number],input[type=time],input[type=date],select{
+  width:100%; min-height:44px; padding:8px 10px; font:inherit; color:var(--ink); background:var(--bg);
+  border:1px solid var(--line); border-radius:8px;
+}
+.checks{display:flex; flex-direction:column; gap:4px}
+.check{display:flex; gap:12px; align-items:flex-start; padding:8px 0; font-size:15px}
+.check input{width:22px; height:22px; margin-top:1px; flex:none; accent-color:var(--accent)}
+.stack{display:flex; flex-direction:column; gap:12px}
+.btn{
+  appearance:none; border:1px solid var(--accent); background:var(--accent); color:var(--accent-ink);
+  font:inherit; font-weight:600; min-height:46px; padding:10px 16px; border-radius:10px; cursor:pointer; text-align:center;
+}
+.btn.ghost{background:transparent; color:var(--accent)}
+.btn.danger{background:var(--bad-ink); border-color:var(--bad-ink); color:var(--bad-bg)}
+.btn-row{display:flex; flex-wrap:wrap; gap:8px}
+.btn-row .btn{flex:1 1 140px}
+.big{font-family:var(--mono); font-weight:600; font-size:34px; line-height:1.1; letter-spacing:-0.02em}
+.kv{display:flex; flex-wrap:wrap; gap:16px 28px; margin-top:6px}
+.kv div{min-width:0}
+.kv .k{font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); font-weight:600}
+.kv .v{font-family:var(--mono); font-weight:600; font-size:18px}
+.doses{display:flex; flex-direction:column; margin-top:6px}
+.dose{display:flex; align-items:center; gap:14px; padding:12px 0; border-top:1px solid var(--line)}
+.dose:first-child{border-top:0}
+.dose input{width:26px; height:26px; flex:none; accent-color:var(--accent)}
+.dose .t{font-family:var(--mono); font-weight:600; font-size:20px; min-width:92px}
+.dose .a{font-family:var(--mono); font-size:20px; flex:1}
+.dose.done .t,.dose.done .a{color:var(--muted); text-decoration:line-through}
+.pills{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+.pill{
+  appearance:none; font:inherit; font-weight:600; min-height:52px; padding:8px 10px; border-radius:10px; cursor:pointer;
+  border:1px solid var(--line); background:var(--bg); color:var(--ink); text-align:center; line-height:1.25;
+}
+.pill[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent)}
+.pill.l3[aria-pressed="true"]{border-color:var(--bad-line); background:var(--bad-bg); box-shadow:inset 0 0 0 1px var(--bad-line)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse; width:100%; font-size:14px}
+th,td{padding:9px 8px; text-align:left; border-top:1px solid var(--line); white-space:nowrap}
+th{font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); border-top:0}
+td.n{font-family:var(--mono); font-variant-numeric:tabular-nums}
+tr.cur td{background:var(--accent-soft); font-weight:600}
+tr.past td{color:var(--muted)}
+svg.chart{width:100%; height:auto; display:block}
+.chart .area{fill:var(--accent-soft)}
+.chart .line{fill:none; stroke:var(--accent); stroke-width:2.5; stroke-linejoin:round}
+.chart .axis{stroke:var(--line); stroke-width:1}
+.chart text{fill:var(--muted); font-family:var(--mono); font-size:10px}
+.chart .mark{stroke:var(--ink); stroke-width:1.5; stroke-dasharray:3 3}
+.chart .dot{fill:var(--ink)}
+.tag{display:inline-block; font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:3px 8px; border-radius:6px; border:1px solid}
+.tag.ex{background:var(--warn-bg); color:var(--warn-ink); border-color:var(--warn-line)}
+.copyrow{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.num{font-family:var(--mono); font-weight:600}
+ol.plain,ul.plain{margin:0; padding-left:20px; display:flex; flex-direction:column; gap:6px}
+textarea.sel{position:fixed; left:-9999px; top:0}
+.status{padding:10px 12px;border-radius:10px;background:var(--accent-soft);color:var(--ink);font-size:13px}
+.divider{height:1px;background:var(--line);margin:4px 0}
+.file-btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+input[type="file"]{max-width:100%;font:inherit;font-size:13px}
+button:disabled{opacity:.5;cursor:not-allowed}
+@media (display-mode:standalone){.brand-tools #installBtn{display:none!important}}
+@media (max-width:420px){.grid2{grid-template-columns:1fr}.big{font-size:30px}}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+
+/* Modern polish: calmer surfaces, stronger hierarchy, and clearer touch targets. */
+:root{--radius:18px;--shadow:0 8px 24px rgba(20,32,30,.055);--line:#D8E2DF;--bg:#F4F7F6;--surface:#FFFFFF;--accent:#087F72;--accent-soft:#DDF4EF}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--shadow:0 8px 24px rgba(0,0,0,.18);--line:#30413D;--bg:#0D1715;--surface:#15231F;--accent:#62D4C3;--accent-soft:#1A3B34}}
+:root[data-theme="dark"]{--shadow:0 8px 24px rgba(0,0,0,.18);--line:#30413D;--bg:#0D1715;--surface:#15231F;--accent:#62D4C3;--accent-soft:#1A3B34}
+body{font-size:16px;line-height:1.55;padding-bottom:48px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:720px}
+header.top{padding:14px 0 12px;backdrop-filter:blur(16px);background:color-mix(in srgb,var(--bg) 92%,transparent)}
+.brand{align-items:center;margin-bottom:14px}.brand h1{font-size:clamp(22px,5vw,28px);letter-spacing:-.035em}.brand span{font-size:12px}
+nav.tabs{gap:8px}nav.tabs a{border-radius:12px;padding:10px 5px;font-size:13px;transition:background .15s ease,border-color .15s ease}
+nav.tabs a[aria-current="page"]{box-shadow:0 3px 10px color-mix(in srgb,var(--accent) 18%,transparent)}
+main{padding-top:22px;gap:18px}.view{gap:18px}
+h2{font-size:clamp(24px,5vw,30px);letter-spacing:-.035em}h3{font-size:12px;letter-spacing:.09em;margin-bottom:2px}
+.card{border-radius:var(--radius);padding:20px;border-color:var(--line);box-shadow:var(--shadow)}
+.banner{border-radius:14px;padding:16px 18px}.grid2{gap:14px}.stack{gap:14px}
+.field{gap:6px}.field label,.lbl{font-size:14px;letter-spacing:-.01em}.hint{font-size:13px;line-height:1.45}
+input[type=number],input[type=time],input[type=date],select{min-height:48px;border-radius:12px;border-color:var(--line);background:var(--bg);transition:border-color .15s ease,box-shadow .15s ease}
+input:focus-visible,select:focus-visible{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent);outline:none}
+.check{gap:12px;padding:9px 0;line-height:1.45}.check input{width:21px;height:21px}
+.btn{border-radius:12px;min-height:48px;box-shadow:0 2px 4px rgba(0,0,0,.04);transition:transform .12s ease,filter .12s ease}.btn:active,.pill:active{transform:scale(.985)}
+.btn.ghost{background:var(--surface)}.big{font-size:clamp(32px,8vw,42px);letter-spacing:-.04em}.kv .v{font-size:19px}
+.dose{gap:12px;padding:14px 0}.dose .t{font-size:17px;min-width:88px}.dose .a{font-size:18px}
+.pill{border-radius:12px;min-height:56px}.tag{border-radius:999px;padding:4px 10px}
+th,td{padding:11px 10px}th{font-size:11px;letter-spacing:.05em}
+.scroll{border-radius:10px}table{font-size:13px}
+@media(max-width:420px){.grid2{grid-template-columns:1fr}.big{font-size:32px}.card{padding:17px}nav.tabs a{font-size:12px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+
+</style>
+
+<script id="logic">
+var STD_OZ=0.6;
+var PACES={
+  fast:{label:'Fast',pct:10,days:2},
+  standard:{label:'Standard',pct:10,days:4},
+  slow:{label:'Slow',pct:10,days:7},
+  vslow:{label:'Very slow',pct:5,days:7}
+};
+function q4(x){return Math.round(x*4)/4;}
+function fmtOz(x){return (Math.round(x*100)/100).toFixed(2).replace(/\.?0+$/,'')+' fl oz';}
+function intake(i){
+  var abv=+i.abv, amt=+i.amount, oz=0, std=0;
+  if(amt>0){
+    if(i.unit==='oz'){oz=amt; std=abv>0?amt*abv/100/STD_OZ:0;}
+    else{std=amt; oz=abv>0?amt*STD_OZ/(abv/100):0;}
+  }
+  return {oz:oz,std:std};
+}
+function buildSteps(baseOz,paceKey,switching){
+  var p=PACES[paceKey]||PACES.slow, steps=[], prev=q4(baseOz);
+  if(baseOz<=0)return steps;
+  if(switching)steps.push({pct:100,oz:prev,days:3,label:'Switch-over'});
+  for(var k=1;;k++){
+    var frac=1-k*p.pct/100;
+    if(frac<=0.0001)break;
+    var oz=q4(baseOz*frac);
+    if(oz<=0)break;
+    if(oz>=prev)continue;
+    steps.push({pct:Math.round(frac*100),oz:oz,days:frac<=0.2501?p.days*2:p.days});
+    prev=oz;
+  }
+  steps.push({pct:0,oz:0,days:Infinity,label:'Stopped'});
+  return steps;
+}
+function totalDays(steps){var t=0;steps.forEach(function(s){if(isFinite(s.days))t+=s.days;});return t;}
+function toMin(t){var a=String(t||'00:00').split(':').map(Number);return (a[0]||0)*60+(a[1]||0);}
+function fmtTime(m){m=((m%1440)+1440)%1440;var h=Math.floor(m/60),mm=m%60,ap=h>=12?'PM':'AM';h=h%12||12;return h+':'+String(mm).padStart(2,'0')+' '+ap;}
+function doseTimes(wake,bed,n){
+  var w=toMin(wake),b=toMin(bed);
+  if(b<=w)b+=1440;
+  var first=w+30,last=Math.max(first,b-150),out=[];
+  for(var i=0;i<n;i++){var t=n===1?first:first+i*(last-first)/(n-1);out.push(Math.round(t/5)*5);}
+  return out;
+}
+function splitDoses(oz,n){
+  var U=Math.round(oz*4),base=Math.floor(U/n),rem=U%n,out=[];
+  for(var i=0;i<n;i++)out.push((base+(i<rem?1:0))/4);
+  return out;
+}
+function assess(i){
+  var high=[],mid=[],it=intake(i);
+  if(+i.age>=65)high.push('Age 65 or older');
+  if(i.fSeizure)high.push('Past seizure, hallucinations, or confusion after going without alcohol');
+  if(i.fSeizDis)high.push('Seizure disorder');
+  if(i.fBenzo)high.push('Benzodiazepines or other sedatives');
+  if(i.fIll)high.push('Liver disease, heart disease, or another serious illness');
+  if(i.fShakes)mid.push('Shaky, sweaty, or anxious in the morning');
+  if(i.fMorning)mid.push('Drinking in the morning to steady yourself');
+  if(i.fBlackout)mid.push('Blackouts');
+  if(it.std>=15)mid.push('15 or more standard drinks a day');
+  if(i.years==='5+'&&+i.dpw>=5)mid.push('Drinking 5 or more days a week for 5+ years');
+  var tier=high.length?'high':(mid.length?'elevated':'low');
+  return {tier:tier,high:high,mid:mid};
+}
+function allowedPaces(tier){return tier==='low'?['fast','standard','slow','vslow']:['slow','vslow'];}
+function defaultPace(tier){return tier==='low'?'standard':'slow';}
+</script>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><h1>Taper Planner</h1><div class="brand-tools"><span>Private by default</span><button class="icon-btn" id="themeToggle" type="button" aria-label="Switch color theme" title="Switch color theme">◐</button><button class="icon-btn" id="installBtn" type="button" hidden>Install</button></div></div>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#today" data-v="today">Today</a>
+      <a href="#plan" data-v="plan">Plan</a>
+      <a href="#setup" data-v="setup">Setup</a>
+      <a href="#safety" data-v="safety">Safety</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="v-setup" class="view" hidden>
+      <div id="exampleBanner" class="banner b-warn" hidden>
+        <strong>Example numbers</strong>
+        Everything below is filled in with sample values so you can see how it works. Replace them with yours.
+      </div>
+
+      <div class="banner b-warn"><strong>Important safety note</strong>Alcohol withdrawal can be life-threatening. This app’s automatically generated schedule is not a clinically validated treatment plan. Contact a healthcare professional before reducing alcohol, especially if you drink heavily or have had withdrawal symptoms.</div>
+
+      <div class="card stack">
+        <h3>About you</h3>
+        <div class="grid2">
+          <div class="field"><label for="age">Age (years)</label><input id="age" type="number" inputmode="numeric" min="18" max="110"></div>
+          <div class="field"><label for="weight">Weight (lb)</label><input id="weight" type="number" inputmode="decimal" min="60" max="600"></div>
+        </div>
+        <div class="field"><label for="sex">Sex (optional)</label>
+          <select id="sex"><option value="">Prefer not to say</option><option value="Male">Male</option><option value="Female">Female</option></select>
+        </div>
+        <p class="hint">Age feeds the risk check. Weight and sex go in the summary you can show a doctor. The taper itself is built from what you actually drink, not from body weight.</p>
+      </div>
+
+      <div class="card stack">
+        <h3>What you drink now</h3>
+        <div class="field"><label for="bev">Drink</label>
+          <select id="bev">
+            <option value="high">Liquor, 80 proof (40%)</option>
+            <option value="low">Low-proof liquor, 40 proof (20%)</option>
+            <option value="beer">Beer (5%)</option>
+            <option value="wine">Wine (12%)</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="field"><label for="abv">Alcohol by volume (ABV, %)</label><input id="abv" type="number" inputmode="decimal" min="0.5" max="95" step="0.5">
+          <span class="hint" id="proofHint"></span></div>
+        <div class="grid2">
+          <div class="field"><label for="amount">Amount per day</label><input id="amount" type="number" inputmode="decimal" min="0" step="0.25"></div>
+          <div class="field"><label for="unit">Measured in</label>
+            <select id="unit"><option value="oz">fl oz of this drink</option><option value="std">standard drinks</option></select>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="dpw">Drinking days (days/week)</label>
+            <select id="dpw"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option></select>
+          </div>
+          <div class="field"><label for="years">Drinking this much for</label>
+            <select id="years"><option value="<6m">Under 6 months</option><option value="6-12m">6 to 12 months</option><option value="1-5">1 to 5 years</option><option value="5+">5+ years</option></select>
+          </div>
+        </div>
+        <p class="hint">If you drink more than one type, enter the total in U.S. standard drinks/day. One U.S. standard drink contains about 0.6 fl oz (14 g) of pure alcohol: 12 fl oz beer at 5% ABV, 5 fl oz wine at 12% ABV, or 1.5 fl oz liquor at 40% ABV (80 proof). At 20% ABV (40 proof), about 3 fl oz contains one standard drink. Check the label: actual strength and serving sizes vary.</p>
+        <div class="banner b-note small" id="stdLine"></div>
+      </div>
+
+      <div class="card stack">
+        <h3>Your day</h3>
+        <div class="grid2">
+          <div class="field"><label for="wake">Wake time</label><input id="wake" type="time"></div>
+          <div class="field"><label for="bed">Bed time</label><input id="bed" type="time"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="doses">Scheduled portions (portions/day)</label><input id="doses" type="number" inputmode="numeric" min="1" max="10"></div>
+          <div class="field"><label for="start">Start date</label><input id="start" type="date"></div>
+        </div>
+        <label class="check"><input id="switching" type="checkbox"><span>I'm switching to a different drink. Hold the same total for 3 days first.</span></label>
+      </div>
+
+      <div class="card stack">
+        <h3>Health check</h3>
+        <div class="checks">
+          <label class="check"><input id="fSeizure" type="checkbox"><span>Seizure, hallucinations, or confusion after going a day or two without alcohol</span></label>
+          <label class="check"><input id="fSeizDis" type="checkbox"><span>Seizure disorder or epilepsy</span></label>
+          <label class="check"><input id="fBenzo" type="checkbox"><span>Take benzodiazepines or other sedatives (Xanax, Valium, Ativan, Klonopin, sleeping pills)</span></label>
+          <label class="check"><input id="fIll" type="checkbox"><span>Liver disease, heart disease, or another serious illness</span></label>
+          <label class="check"><input id="fShakes" type="checkbox"><span>Shaky, sweaty, or anxious in the morning</span></label>
+          <label class="check"><input id="fMorning" type="checkbox"><span>Drink in the morning to steady yourself</span></label>
+          <label class="check"><input id="fBlackout" type="checkbox"><span>Blackouts</span></label>
+        </div>
+      </div>
+
+      <div class="card stack">
+        <h3>Medications and support</h3>
+        <div class="checks">
+          <label class="check"><input id="mOpioid" type="checkbox"><span>I take or use any opioid (oxycodone, hydrocodone, codeine, tramadol, Suboxone, methadone, heroin, fentanyl)</span></label>
+          <label class="check"><input id="mNaltrexone" type="checkbox"><span>I have naltrexone on hand</span></label>
+          <label class="check"><input id="mWeed" type="checkbox"><span>I use cannabis to help me sleep</span></label>
+          <label class="check"><input id="sSupport" type="checkbox"><span>Someone knows the plan and can check on me</span></label>
+        </div>
+      </div>
+
+      <div class="card stack" id="riskCard">
+        <h3>Result</h3>
+        <div id="riskOut" class="stack"></div>
+        <div class="field" id="paceField"><label for="pace">Pace</label><select id="pace"></select><span class="hint" id="paceHint"></span></div>
+        <div id="preview" class="small muted"></div>
+        <button class="btn" id="startBtn" type="button">Start this plan</button>
+      </div>
+    </section>
+
+    <section id="v-today" class="view" hidden></section>
+    <section id="v-plan" class="view" hidden></section>
+
+    <section id="v-safety" class="view" hidden>
+      <h2>Safety</h2>
+      <div class="banner b-bad">
+        <strong>Call 911 right away for</strong>
+        <ul>
+          <li>A seizure, or another seizure</li>
+          <li>Hallucinations, confusion, or not knowing where you are</li>
+          <li>Trouble breathing, chest pain, or a racing or irregular heartbeat</li>
+          <li>Heavy drowsiness, trouble waking, or fainting</li>
+          <li>Fever of 100.4°F or higher with shaking or sweating</li>
+        </ul>
+      </div>
+      <div class="card stack">
+        <h3>Get help the same day for</h3>
+        <ul class="plain">
+          <li>Shakes that keep getting worse</li>
+          <li>Repeated vomiting, or a headache with confusion</li>
+          <li>Upper belly pain that gets worse</li>
+          <li>Yellow skin or eyes, or dark urine</li>
+        </ul>
+        <div class="copyrow">
+          <span>SAMHSA helpline, free, 24/7: <span class="num">1-800-662-4357</span></span>
+          <button class="btn ghost" type="button" data-copy="1-800-662-4357" style="flex:none">Copy number</button>
+        </div>
+      </div>
+      <div class="card stack">
+        <h3>Timing to know</h3>
+        <ul class="plain">
+          <li>Withdrawal symptoms can start within hours of a drop in drinking.</li>
+          <li>Seizures show up most often between 8 and 48 hours after the last drink.</li>
+          <li>Delirium tremens usually starts around 48 hours and can run up to five days. It can be fatal without treatment.</li>
+        </ul>
+      </div>
+      <div class="card stack">
+        <h3>While you taper</h3>
+        <ul class="plain">
+          <li>Ask a healthcare professional whether you need thiamine; do not rely on supplements to prevent severe withdrawal.</li>
+          <li>Eat regular meals and drink plenty of water.</li>
+          <li>Don't drive if you have symptoms.</li>
+          <li>Keep someone in the loop, especially in the first two weeks.</li>
+          <li>A clinician can assess withdrawal risk and discuss appropriate treatment options.</li>
+        </ul>
+      </div>
+      <div class="card stack" id="appSettings">
+        <h3>App settings &amp; backup</h3>
+        <p class="small muted">Your information stays in this browser unless you export it. Export a backup before clearing browser data or moving devices.</p>
+        <div class="field"><label for="reminderTime">Daily check-in reminder time</label><input id="reminderTime" type="time" value="09:00"><span class="hint">A reminder can appear while this app is open. Browsers generally cannot guarantee a scheduled notification while the app is fully closed without a push service.</span></div>
+        <label class="check"><input id="reminderEnabled" type="checkbox"><span>Enable daily reminder while the app is open</span></label>
+        <div class="btn-row"><button class="btn" id="enableNotifications" type="button">Allow notifications</button><button class="btn ghost" id="testNotification" type="button">Test reminder</button></div>
+        <div id="notificationStatus" class="status" role="status" aria-live="polite">Notifications are optional. The in-app check-in remains available without them.</div>
+        <div class="divider"></div>
+        <div class="btn-row"><button class="btn ghost" id="exportData" type="button">Export backup (.json)</button><label class="file-btn" for="importData">Restore backup</label><input id="importData" type="file" accept="application/json,.json" hidden></div>
+        <p class="hint">Backup files may contain sensitive health and drinking information. Store them somewhere private.</p>
+        <div class="divider"></div>
+        <button class="btn danger" id="resetData" type="button">Erase app data on this device</button>
+        <p class="hint">This deletes the app's saved settings, plan, check-ins, and progress from this browser. It cannot delete exported backups.</p>
+      </div>
+      <div class="card stack" id="medNotes"></div>
+      <div class="card stack"><h3>Sources and limits</h3><p class="small">U.S. standard-drink definitions: <a href="https://www.niaaa.nih.gov/health-professionals-communities/core-resource-on-alcohol/basics-defining-how-much-alcohol-too-much" target="_blank" rel="noopener">NIAAA standard drink guidance</a>.</p><p class="small">Withdrawal assessment and treatment guidance: <a href="https://www.asam.org/quality-care/clinical-guidelines/alcohol-withdrawal-management-guideline" target="_blank" rel="noopener">ASAM Clinical Practice Guideline</a>.</p><p class="small muted">The standard-drink conversion is based on U.S. public-health definitions. The taper percentages, pace options, and automated risk categories in this app are not a validated clinical protocol and should not be treated as a medically approved schedule. This app does not replace assessment or treatment by a clinician.</p></div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+var KEY='taper-planner-v1';
+function $(id){return document.getElementById(id);}
+function keyOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function parseKey(k){var a=k.split('-').map(Number);return new Date(a[0],a[1]-1,a[2]);}
+function addDays(k,n){var d=parseKey(k);d.setDate(d.getDate()+n);return keyOf(d);}
+function diffDays(a,b){return Math.round((parseKey(b)-parseKey(a))/86400000);}
+function fmtDate(k,long){return parseKey(k).toLocaleDateString('en-US',long?{weekday:'long',month:'long',day:'numeric'}:{month:'short',day:'numeric'});}
+var today=keyOf(new Date());
+
+var DEF={age:'35',weight:'180',sex:'',bev:'low',abv:'20',amount:'36',unit:'oz',dpw:'7',years:'1-5',doses:'5',wake:'07:30',bed:'23:00',start:today,switching:false,
+  fSeizure:false,fSeizDis:false,fBenzo:false,fIll:false,fShakes:false,fMorning:false,fBlackout:false,
+  mOpioid:false,mNaltrexone:false,mWeed:false,sSupport:false,pace:'standard'};
+var PRESET={high:'40',low:'20',beer:'5',wine:'12',other:''};
+
+var S=null;
+try{S=JSON.parse(localStorage.getItem(KEY));}catch(e){S=null;}
+if(!S||!S.inp){S={inp:Object.assign({},DEF),example:true,saved:false,planInp:null,cur:0,curStart:today,extra:0,log:{},done:{},override:false};}
+else{S.inp=Object.assign({},DEF,S.inp);S.log=S.log||{};S.done=S.done||{};}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+
+/* ---------- copy helper ---------- */
+function copyText(text,btn){
+  var done=function(){if(btn){var o=btn.textContent;btn.textContent='Copied';setTimeout(function(){btn.textContent=o;},1400);}};
+  var fallback=function(){
+    var t=document.createElement('textarea');t.className='sel';t.value=text;document.body.appendChild(t);t.select();
+    try{document.execCommand('copy');done();}catch(e){}
+    document.body.removeChild(t);
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done,fallback);}else fallback();
+}
+document.addEventListener('click',function(e){
+  var b=e.target.closest('[data-copy]');
+  if(b)copyText(b.getAttribute('data-copy'),b);
+});
+
+/* ---------- setup form ---------- */
+var ids=Object.keys(DEF);
+ids.forEach(function(id){
+  var el=$(id); if(!el)return;
+  if(el.type==='checkbox')el.checked=!!S.inp[id]; else if(id!=='pace')el.value=S.inp[id];
+  el.addEventListener('input',function(){
+    S.inp[id]=el.type==='checkbox'?el.checked:el.value;
+    S.example=false;
+    if(id==='bev'&&PRESET[el.value]!==''){S.inp.abv=PRESET[el.value];$('abv').value=S.inp.abv;}
+    save();refreshSetup();
+  });
+});
+
+function refreshSetup(){
+  var i=S.inp, it=intake(i), a=assess(i);
+  $('exampleBanner').hidden=!S.example;
+  var abv=+i.abv;
+  $('proofHint').textContent=abv>0?(abv*2)+' proof':'';
+  $('stdLine').textContent=it.std>0?('That is about '+(Math.round(it.std*10)/10)+' U.S. standard drinks/day ('+fmtOz(it.oz)+' of this beverage/day).'):'Enter an amount to see your daily total.';
+
+  var allowed=allowedPaces(a.tier);
+  if(allowed.indexOf(i.pace)<0){i.pace=defaultPace(a.tier);save();}
+  var steps=buildSteps(it.oz,i.pace,i.switching), td=totalDays(steps);
+  var pace=$('pace');
+  pace.innerHTML=allowed.map(function(k){
+    var st=buildSteps(it.oz,k,i.switching), d=totalDays(st);
+    var txt=PACES[k].label+': '+PACES[k].pct+'% of baseline every '+PACES[k].days+' days/step'+(d?', about '+fmtSpan(d):'');
+    return '<option value="'+k+'"'+(k===i.pace?' selected':'')+'>'+txt+'</option>';
+  }).join('');
+  pace.onchange=function(){S.inp.pace=pace.value;save();refreshSetup();};
+  $('paceHint').textContent='Steps get twice as long once you are at a quarter of your baseline or less.';
+
+  var h='';
+  if(a.tier==='high'){
+    h+='<div class="banner b-bad"><strong>Do not taper alone</strong>These apply to you:<ul>'+a.high.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ul>'+
+       '<p style="margin-top:8px">With these, stopping or cutting back without medical supervision can cause seizures or delirium tremens. Call a doctor or the SAMHSA helpline (1-800-662-4357) before changing anything. You can still build the schedule to bring to them.</p></div>';
+  }else if(a.tier==='elevated'){
+    h+='<div class="banner b-warn"><strong>Elevated risk: slow pace only</strong>Signs of physical dependence:<ul>'+a.mid.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ul>'+
+       '<p style="margin-top:8px">Only the slower paces are offered. Have someone with you for the first two weeks. A clinician can assess whether medication or a higher level of care is needed.</p></div>';
+    if(!i.sSupport)h+='<div class="banner b-warn"><strong>No support person yet</strong>Tell someone the plan before you start.</div>';
+  }else{
+    h+='<div class="banner b-ok"><strong>No flags detected by this limited check</strong>This limited check cannot rule out withdrawal risk. Discuss any reduction with a healthcare professional.</div>';
+  }
+  $('riskOut').innerHTML=h;
+  $('preview').textContent=it.oz>0?('Starts at '+fmtOz(it.oz)+' a day. '+steps.length+' steps, about '+fmtSpan(td)+' to reach zero. Finish around '+fmtDate(addDays(i.start||today,td))+'.'):'Enter what you drink to see the plan.';
+  $('startBtn').textContent=S.saved?'Restart plan with these numbers':'Start this plan';
+  $('startBtn').disabled=!(it.oz>0&&+i.doses>=1);
+  renderMeds();
+}
+function fmtSpan(d){if(d<14)return d+' days';if(d<70)return Math.round(d/7)+' weeks';return (Math.round(d/30.4*2)/2)+' months';}
+
+$('startBtn').addEventListener('click',function(){
+  S.planInp=Object.assign({},S.inp);
+  S.saved=true;S.cur=0;S.curStart=S.inp.start||today;S.extra=0;S.log={};S.done={};S.override=false;
+  save();location.hash='#today';route();
+});
+
+/* ---------- plan state helpers ---------- */
+function planData(){
+  var P=S.planInp; if(!S.saved||!P)return null;
+  var it=intake(P), steps=buildSteps(it.oz,P.pace,P.switching), a=assess(P);
+  return {P:P,it:it,steps:steps,a:a};
+}
+function advance(d){
+  var guard=0;
+  while(S.cur<d.steps.length-1&&today>=addDays(S.curStart,d.steps[S.cur].days+S.extra)&&guard++<500){
+    S.curStart=addDays(S.curStart,d.steps[S.cur].days+S.extra);S.cur++;S.extra=0;
+  }
+  save();
+}
+function stepStarts(d){
+  var out=[],base=S.curStart,i;
+  for(i=0;i<d.steps.length;i++){
+    if(i<S.cur)out.push(null);
+    else if(i===S.cur)out.push(base);
+    else out.push(addDays(out[i-1],d.steps[i-1].days+(i-1===S.cur?S.extra:0)));
+  }
+  return out;
+}
+
+/* ---------- today view ---------- */
+var LEVELS=[
+  {t:'Feeling okay',c:''},
+  {t:'Mild shakes or anxiety',c:''},
+  {t:'Sweats, worse shakes, or bad anxiety',c:''},
+  {t:'Hallucinations, confusion, seizure, fever, or chest pain',c:'l3'}
+];
+function blocked(d){return d.a.tier==='high';}
+function renderToday(){
+  var el=$('v-today'), d=planData();
+  if(!d){el.innerHTML='<h2>No plan yet</h2><div class="card stack"><p>Fill in Setup and press Start to get today\'s amounts.</p><a class="btn" href="#setup" style="text-decoration:none">Go to Setup</a></div>';return;}
+  if(blocked(d)){
+    el.innerHTML='<h2>Not for solo use</h2><div class="banner b-bad"><strong>Your answers show a high risk of dangerous withdrawal</strong><ul>'+d.a.high.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ul><p style="margin-top:8px">Today\'s amounts are turned off. Call a doctor or the SAMHSA helpline at 1-800-662-4357 before changing how much you drink. The Plan tab has the schedule to review with them.</p></div>';
+    return;
+  }
+  advance(d);
+  var st=d.steps, s=st[S.cur], last=S.cur===st.length-1, P=d.P;
+  var before=today<S.curStart;
+  var starts=stepStarts(d);
+  var times=doseTimes(P.wake,P.bed,Math.max(1,+P.doses)), amts=splitDoses(s.oz,Math.max(1,+P.doses));
+  var done=S.done[today]||[];
+  var h='';
+  if(before)h+='<div class="banner b-note"><strong>Starts '+fmtDate(S.curStart,true)+'</strong>Until then, keep your usual amount. Log it so you know your real baseline.</div>';
+  if(S.override||d.a.tier==='elevated')h+='<div class="banner b-warn small"><strong>Elevated risk</strong>Do not skip the morning check. Any step that worsens symptoms means hold or go back.</div>';
+
+  if(last){
+    h+='<h2>Schedule reaches zero</h2><div class="card stack"><p>This is the end of the experimental schedule, not confirmation that stopping is medically safe. Withdrawal can still become dangerous after the last drink. Follow a clinician&#39;s advice and seek urgent help for new or worsening symptoms.</p></div>';
+  }else{
+    var nextOz=st[S.cur+1].oz, nextDate=starts[S.cur+1];
+    h+='<div class="card">'+
+       '<h3>'+fmtDate(today,true)+'</h3>'+
+       '<div class="big">'+fmtOz(s.oz)+'</div>'+
+       '<div class="small muted">of your drink today, '+(s.label?s.label+', ':'')+s.pct+'% of baseline</div>'+
+       '<div class="kv">'+
+        '<div><div class="k">Standard drinks/day</div><div class="v">'+(Math.round(s.oz/(d.it.oz||1)*d.it.std*10)/10)+'</div></div>'+
+        '<div><div class="k">Step</div><div class="v">'+(S.cur+1)+' of '+(st.length-1)+'</div></div>'+
+        '<div><div class="k">Next change</div><div class="v">'+(nextOz===0?'zero':fmtOz(nextOz))+' on '+fmtDate(nextDate)+'</div></div>'+
+       '</div></div>';
+    h+='<div class="card"><h3>Measure it out in the morning</h3><p class="small muted">Pour the day\'s total into a labeled bottle. Drink only from it, at these times.</p><div class="doses">'+
+       times.map(function(t,k){return '<label class="dose'+(done[k]?' done':'')+'"><input type="checkbox" data-dose="'+k+'"'+(done[k]?' checked':'')+'><span class="t">'+fmtTime(t)+'</span><span class="a">'+fmtOz(amts[k])+'</span></label>';}).join('')+
+       '</div></div>';
+  }
+  var lv=S.log[today];
+  h+='<div class="card stack"><h3>Morning check</h3><div class="pills">'+
+     LEVELS.map(function(l,k){return '<button class="pill '+l.c+'" type="button" data-lvl="'+k+'" aria-pressed="'+(lv===k)+'">'+l.t+'</button>';}).join('')+'</div><div id="lvlOut" class="stack">'+lvlHtml(lv,d)+'</div></div>';
+  var keys=Object.keys(S.log).sort().slice(-7).reverse();
+  if(keys.length)h+='<div class="card"><h3>Last 7 checks</h3><div class="small" style="display:flex;flex-direction:column;gap:4px">'+keys.map(function(k){return '<div style="display:flex;justify-content:space-between;gap:12px"><span>'+fmtDate(k)+'</span><span class="muted">'+LEVELS[S.log[k]].t+'</span></div>';}).join('')+'</div></div>';
+  h+='<div class="card small"><h3>Every day</h3><ul class="plain"><li>Multivitamin with thiamine</li><li>Regular meals and plenty of water</li><li>Do not drive if you have symptoms</li></ul></div>';
+  el.innerHTML=h;
+}
+function lvlHtml(l,d){
+  if(l===undefined)return '';
+  if(l===0)return '<div class="banner b-ok">Good. Stay on today\'s amounts.</div>';
+  if(l===1)return '<div class="banner b-note">Mild symptoms are common during a taper. Keep today\'s amounts. If you feel the same tomorrow, hold this step a few days before reducing again.</div><div class="btn-row"><button class="btn ghost" type="button" data-act="hold">Hold this step 2 more days</button></div>';
+  if(l===2)return '<div class="banner b-warn"><strong>Withdrawal symptoms need medical advice</strong>Do not use this app to decide how much alcohol to take. Contact a healthcare professional urgently. Call emergency services for severe symptoms.</div><div class="btn-row"><button class="btn" type="button" data-act="hold">Hold 2 more days</button><button class="btn ghost" type="button" data-act="back">Go back one step</button></div>';
+  return '<div class="banner b-bad"><strong>Call 911 now</strong>Do not drive yourself and do not stay alone. Tell them you are withdrawing from alcohol.</div>';
+}
+$('v-today').addEventListener('click',function(e){
+  var d=planData(); if(!d)return;
+  var b=e.target.closest('[data-lvl]');
+  if(b){S.log[today]=+b.getAttribute('data-lvl');save();renderToday();return;}
+  var a=e.target.closest('[data-act]');
+  if(a){
+    var act=a.getAttribute('data-act');
+    if(act==='hold'){S.extra+=2;}
+    if(act==='back'&&S.cur>0){S.cur--;S.curStart=today;S.extra=0;}
+    save();renderToday();
+  }
+});
+$('v-today').addEventListener('change',function(e){
+  var c=e.target.closest('[data-dose]'); if(!c)return;
+  var arr=S.done[today]||[]; arr[+c.getAttribute('data-dose')]=c.checked; S.done[today]=arr; save();
+  c.closest('.dose').classList.toggle('done',c.checked);
+});
+
+/* ---------- plan view ---------- */
+function chart(d,starts){
+  var st=d.steps, W=360,H=150,L=46,R=350,T=14,B=118, tot=totalDays(st)+7, base=Math.max(st[0].oz,0.25);
+  var x=function(day){return L+(R-L)*day/tot;}, y=function(oz){return B-(B-T)*oz/base;};
+  var pts=[],cum=0,i;
+  for(i=0;i<st.length;i++){
+    var dd=isFinite(st[i].days)?st[i].days:7;
+    pts.push([x(cum),y(st[i].oz)]);pts.push([x(cum+dd),y(st[i].oz)]);cum+=dd;
+  }
+  var line='M'+pts.map(function(p){return p[0].toFixed(1)+' '+p[1].toFixed(1);}).join(' L');
+  var area=line+' L'+x(tot).toFixed(1)+' '+B+' L'+L+' '+B+' Z';
+  var before=0;for(i=0;i<S.cur;i++)before+=st[i].days;
+  var mx=x(before+Math.max(0,diffDays(S.curStart,today)));
+  return '<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Daily amount over time, stepping down to zero">'+
+    '<line class="axis" x1="'+L+'" y1="'+B+'" x2="'+R+'" y2="'+B+'"/><line class="axis" x1="'+L+'" y1="'+T+'" x2="'+L+'" y2="'+B+'"/>'+
+    '<path class="area" d="'+area+'"/><path class="line" d="'+line+'"/>'+
+    '<line class="mark" x1="'+mx.toFixed(1)+'" y1="'+T+'" x2="'+mx.toFixed(1)+'" y2="'+B+'"/><circle class="dot" cx="'+mx.toFixed(1)+'" cy="'+y(st[Math.min(S.cur,st.length-1)].oz).toFixed(1)+'" r="3.5"/>'+
+    '<text x="'+(L-6)+'" y="'+(T+4)+'" text-anchor="end">'+fmtOz(st[0].oz).replace(' fl oz','')+'</text>'+
+    '<text x="'+(L-6)+'" y="'+(B+3)+'" text-anchor="end">0</text>'+
+    '<text x="'+L+'" y="'+(B+16)+'">Day 0</text><text x="'+R+'" y="'+(B+16)+'" text-anchor="end">Day '+(tot-7)+'</text>'+
+    '<text x="'+(L+4)+'" y="'+(H-3)+'">fl oz/day</text></svg>';
+}
+function renderPlan(){
+  var el=$('v-plan'), d=planData();
+  if(!d){el.innerHTML='<h2>No plan yet</h2><div class="card stack"><p>Fill in Setup and press Start to see the full schedule.</p><a class="btn" href="#setup" style="text-decoration:none">Go to Setup</a></div>';return;}
+  var high=blocked(d);
+  if(high&&!S.override){
+    el.innerHTML='<h2>Schedule for your doctor</h2><div class="banner b-bad"><strong>Not for solo use</strong>Your answers show a high risk of dangerous withdrawal. You can view the schedule to review with a clinician, but do not follow it on your own.</div><button class="btn danger" type="button" id="showOverride">Show the schedule to review with a doctor</button>';
+    $('showOverride').onclick=function(){S.override=true;save();renderPlan();};
+    return;
+  }
+  if(!high)advance(d);
+  var st=d.steps, starts=stepStarts(d), P=d.P, h='<h2>Full schedule</h2>';
+  if(high)h+='<div class="banner b-bad"><strong>For review with a doctor only</strong>Do not follow this schedule alone with the risk factors you listed.</div>';
+  h+='<div class="card"><h3>Daily amount</h3>'+chart(d,starts)+'</div>';
+  h+='<div class="card"><div class="scroll"><table><thead><tr><th>#</th><th>Dates</th><th>Drink (fl oz/day)</th><th>Standard drinks/day</th><th>Per portion (fl oz)</th><th>Baseline (%)</th></tr></thead><tbody>';
+  var nd=Math.max(1,+P.doses);
+  st.forEach(function(s,i){
+    var cls=i===S.cur&&!high?'cur':(i<S.cur&&!high?'past':'');
+    var dates;
+    if(i<S.cur&&!high)dates='Done';
+    else if(!isFinite(s.days))dates='From '+fmtDate(starts[i]||addDays(P.start||today,totalDays(st)));
+    else{var sd=high?addDays(P.start||today,st.slice(0,i).reduce(function(a,x){return a+x.days;},0)):starts[i];dates=fmtDate(sd)+' to '+fmtDate(addDays(sd,s.days-1));}
+    var sdr=d.it.oz?Math.round(s.oz/d.it.oz*d.it.std*10)/10:0;
+    h+='<tr class="'+cls+'"><td class="n">'+(i+1)+'</td><td>'+dates+'</td><td class="n">'+fmtOz(s.oz)+'</td><td class="n">'+sdr+'</td><td class="n">'+(s.oz?fmtOz(s.oz/nd):'0')+'</td><td class="n">'+s.pct+'%</td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  h+='<div class="card stack"><h3>Share with a doctor</h3><p class="small muted">Copies your numbers and this schedule as plain text.</p><button class="btn ghost" type="button" id="copySummary">Copy summary</button></div>';
+  h+='<div class="card small"><h3>Rules</h3><ul class="plain"><li>If symptoms appear or worsen, do not rely on the schedule or this app for treatment decisions; contact a healthcare professional promptly.</li><li>Do not make up skipped doses later.</li><li>Do not use this experimental schedule as a substitute for clinical advice.</li></ul></div>';
+  el.innerHTML=h;
+  $('copySummary').onclick=function(){copyText(summary(d,starts),$('copySummary'));};
+}
+function summary(d,starts){
+  var P=d.P, st=d.steps, L=[];
+  L.push('Alcohol taper summary (self-managed plan, not medical advice)');
+  L.push('Age: '+P.age+(P.sex?', '+P.sex:'')+'. Weight: '+P.weight+' lb.');
+  L.push('Beverage intake: '+fmtOz(d.it.oz)+'/day at '+P.abv+'% ABV ('+(Math.round(d.it.std*10)/10)+' U.S. standard drinks/day), '+P.dpw+' days/week, for '+P.years+'.');
+  var f=[];
+  [['fSeizure','past withdrawal seizure/hallucinations/confusion'],['fSeizDis','seizure disorder'],['fBenzo','benzodiazepines/sedatives'],['fIll','serious illness'],['fShakes','morning shakes/sweats'],['fMorning','morning drinking'],['fBlackout','blackouts'],['mOpioid','opioid use'],['mNaltrexone','has naltrexone'],['mWeed','cannabis for sleep']].forEach(function(p){if(P[p[0]])f.push(p[1]);});
+  L.push('Flags: '+(f.length?f.join(', '):'none reported')+'.');
+  L.push('Risk tier: '+d.a.tier+'. Pace: '+PACES[P.pace].label+' ('+PACES[P.pace].pct+'% of baseline every '+PACES[P.pace].days+' days/step; steps double once at 25% or less).');
+  L.push('Schedule (beverage volume in fl oz/day; standard drinks are U.S. equivalents):');
+  st.forEach(function(s,i){L.push((i+1)+'. '+(s.oz?fmtOz(s.oz):'0')+(isFinite(s.days)?' for '+s.days+' days':' (stop)'));});
+  return L.join('\n');
+}
+
+/* ---------- med notes (safety tab) ---------- */
+function renderMeds(){
+  var i=(S.saved&&S.planInp)?S.planInp:S.inp, h='<h3>Your medications</h3>';
+  if(i.mOpioid)h+='<div class="banner b-bad"><strong>Do not take naltrexone with opioids</strong>It can cause sudden, severe opioid withdrawal. Talk to a pharmacist or prescriber first.</div>';
+  if(i.mNaltrexone&&!i.mOpioid)h+='<div class="banner b-note small"><strong>Naltrexone</strong>It can reduce cravings, but it does not prevent or treat alcohol withdrawal and does not lower seizure risk. Check the label for dose and expiration, and ask a pharmacist whether to start now. Yellow skin or eyes, dark urine, or worsening upper belly pain means stop and get seen.</div>';
+  if(!i.mNaltrexone&&!i.mOpioid)h+='<p class="small muted">No medication notes for what you entered.</p>';
+  if(i.mWeed)h+='<div class="banner b-note small"><strong>Cannabis for sleep</strong>Naltrexone may dull its effect. Insomnia is also a common withdrawal symptom, so sweats, shakes, or anxiety with a bad night means check in with the taper, not just sleep.</div>';
+  $('medNotes').innerHTML=h;
+}
+
+/* ---------- app preferences, backup, install and reminders ---------- */
+var PREFKEY='taper-planner-preferences-v1';
+var prefs={theme:'system',reminderEnabled:false,reminderTime:'09:00',lastReminderDate:''};
+try{prefs=Object.assign(prefs,JSON.parse(localStorage.getItem(PREFKEY)||'{}'));}catch(e){}
+function savePrefs(){try{localStorage.setItem(PREFKEY,JSON.stringify(prefs));}catch(e){}}
+function applyTheme(){
+  if(prefs.theme==='system')document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme',prefs.theme);
+  var dark=prefs.theme==='dark'||(prefs.theme==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+  var meta=$('themeColorMeta');if(meta)meta.setAttribute('content',dark?'#0D1715':'#087F72');
+  var b=$('themeToggle');if(b){b.textContent=prefs.theme==='light'?'☀':prefs.theme==='dark'?'☾':'◐';b.setAttribute('aria-label','Current theme: '+prefs.theme+'. Tap to change theme');}
+}
+applyTheme();
+$('themeToggle').addEventListener('click',function(){prefs.theme=prefs.theme==='system'?'light':prefs.theme==='light'?'dark':'system';savePrefs();applyTheme();});
+var deferredInstallPrompt=null;
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredInstallPrompt=e;$('installBtn').hidden=false;});
+$('installBtn').addEventListener('click',async function(){
+  if(!deferredInstallPrompt){setStatus('To install, use your browser menu and choose “Install app” or “Add to Home screen”.');return;}
+  deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;$('installBtn').hidden=true;
+});
+window.addEventListener('appinstalled',function(){$('installBtn').hidden=true;setStatus('App installed.');});
+function setStatus(msg){var n=$('notificationStatus');if(n)n.textContent=msg;}
+function syncPrefControls(){
+  $('reminderEnabled').checked=!!prefs.reminderEnabled;$('reminderTime').value=prefs.reminderTime||'09:00';
+  var support=('Notification' in window);$('enableNotifications').disabled=!support;
+  $('testNotification').disabled=!support||Notification.permission!=='granted';
+  if(!support)setStatus('This browser does not support notifications. In-app check-ins still work.');
+  else if(Notification.permission==='denied')setStatus('Notifications are blocked in browser settings. You can still use the app without them.');
+  else if(prefs.reminderEnabled)setStatus('Daily reminder is enabled while the app is open. Keep this page open for best-effort reminders.');
+  else setStatus('Notifications are optional. Enable the reminder and allow notifications if you want a daily prompt.');
+}
+$('reminderEnabled').addEventListener('change',function(){prefs.reminderEnabled=this.checked;savePrefs();syncPrefControls();checkReminder();});
+$('reminderTime').addEventListener('change',function(){prefs.reminderTime=this.value||'09:00';savePrefs();syncPrefControls();});
+$('enableNotifications').addEventListener('click',async function(){
+  if(!('Notification' in window)){setStatus('Notifications are not supported in this browser.');return;}
+  if(!window.isSecureContext){setStatus('Notifications require a secure context (HTTPS or localhost).');return;}
+  try{var permission=await Notification.requestPermission();setStatus(permission==='granted'?'Notifications allowed. Enable the daily reminder above.':permission==='denied'?'Permission denied. Change this in browser site settings if you want notifications.':'Permission not granted.');}
+  catch(e){setStatus('Could not request notification permission in this browser.');}syncPrefControls();
+});
+async function showReminder(title,body){
+  if(!('Notification' in window)||Notification.permission!=='granted')return false;
+  try{if('serviceWorker' in navigator){var reg=await navigator.serviceWorker.ready;if(reg&&reg.showNotification){await reg.showNotification(title,{body:body,icon:'icon-192.png',badge:'icon-192.png',tag:'taper-planner-reminder',renotify:false});return true;}}
+    new Notification(title,{body:body,icon:'icon-192.png',tag:'taper-planner-reminder'});return true;
+  }catch(e){return false;}
+}
+$('testNotification').addEventListener('click',async function(){
+  if(!('Notification' in window)){setStatus('Notifications are not supported here.');return;}
+  if(Notification.permission!=='granted'){setStatus('First tap “Allow notifications” and grant permission.');return;}
+  var ok=await showReminder('Daily check-in','This is a test reminder. Open the app for your daily check-in.');setStatus(ok?'Test notification sent.':'The browser could not show a notification. Check site permissions.');
+});
+function checkReminder(){
+  if(!prefs.reminderEnabled||!('Notification' in window)||Notification.permission!=='granted')return;
+  var now=new Date(),todayKey=keyOf(now),parts=(prefs.reminderTime||'09:00').split(':');
+  var target=Number(parts[0])*60+Number(parts[1]),current=now.getHours()*60+now.getMinutes();
+  if(current>=target&&prefs.lastReminderDate!==todayKey){prefs.lastReminderDate=todayKey;savePrefs();showReminder('Daily check-in','Take a moment to record how you are feeling in Taper Planner.');}
+}
+syncPrefControls();checkReminder();window.setInterval(checkReminder,30000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)checkReminder();});window.addEventListener('focus',checkReminder);
+$('exportData').addEventListener('click',function(){
+  var payload={app:'Taper Planner',formatVersion:1,exportedAt:new Date().toISOString(),state:S,preferences:prefs};
+  var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='taper-planner-backup-'+keyOf(new Date())+'.json';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);setStatus('Backup exported. Keep the file somewhere private.');
+});
+$('importData').addEventListener('change',async function(){
+  var file=this.files&&this.files[0];if(!file)return;
+  try{var payload=JSON.parse(await file.text()),incoming=payload&&payload.state;
+    if(!incoming||!incoming.inp||typeof incoming.inp!=='object')throw new Error('This file does not look like a Taper Planner backup.');
+    if(!confirm('Restore this backup? It will replace the current plan and check-ins in this browser.')){this.value='';return;}
+    S=incoming;S.inp=Object.assign({},DEF,S.inp);S.log=S.log||{};S.done=S.done||{};
+    if(payload.preferences){prefs=Object.assign(prefs,payload.preferences);savePrefs();applyTheme();}
+    save();location.hash=S.saved?'#today':'#setup';route();syncPrefControls();setStatus('Backup restored.');
+  }catch(e){alert('Could not restore backup: '+(e.message||'invalid file'));}this.value='';
+});
+$('resetData').addEventListener('click',function(){
+  if(!confirm('Erase all Taper Planner data stored in this browser? This cannot be undone unless you exported a backup.'))return;
+  try{localStorage.removeItem(KEY);localStorage.removeItem(PREFKEY);}catch(e){}
+  S={inp:Object.assign({},DEF,{start:keyOf(new Date())}),example:true,saved:false,planInp:null,cur:0,curStart:keyOf(new Date()),extra:0,log:{},done:{},override:false};
+  prefs={theme:'system',reminderEnabled:false,reminderTime:'09:00',lastReminderDate:''};save();savePrefs();applyTheme();location.hash='#setup';route();syncPrefControls();setStatus('App data erased from this browser.');
+});
+
+/* ---------- routing ---------- */
+var VIEWS=['today','plan','setup','safety'];
+function route(){
+  var v=(location.hash||'').replace('#','');
+  if(VIEWS.indexOf(v)<0)v=S.saved?'today':'setup';
+  VIEWS.forEach(function(n){$('v-'+n).hidden=n!==v;});
+  document.querySelectorAll('nav.tabs a').forEach(function(a){
+    if(a.getAttribute('data-v')===v)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');
+  });
+  if(v==='today')renderToday();
+  if(v==='plan')renderPlan();
+  if(v==='setup')refreshSetup();
+  if(v==='safety')renderMeds();
+  window.scrollTo(0,0);
+}
+window.addEventListener('hashchange',route);
+refreshSetup();
+route();
+})();
+</script>
+<script>if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});}</script>
+</body>
+</html>
